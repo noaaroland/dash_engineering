@@ -23,8 +23,6 @@ graph_config = {'modeBarButtonsToRemove' : ['hoverCompareCartesian','select2d', 
                 'displaylogo': False}
 
 app.layout =  ddk.App([
-    dcc.Store(id='load_data', storage_type='memory'),
-    dcc.Store(id='profile_data', storage_type='memory'),
     ddk.Header([
         ddk.Logo(src=app.get_asset_url('logo.png'), style={
             'max-height':100,
@@ -36,14 +34,26 @@ app.layout =  ddk.App([
     ]),
     ddk.Block(
         children=[
-            dcc.Tabs(id='selected-tab', value='load', children=[
-                dcc.Tab(label="Load", value='load'),
-                dcc.Tab(label="Profiles", value='profiles')
-            ]),
-            ddk.Card(width=100, children=[
-                dcc.Loading(id='data-loader', children=[html.Div()]),
-                dcc.Loading(id='loader', children=[ddk.Graph(id="all_plots", config=graph_config)])
-            ]),
+            dcc.Tabs(id='selected-tab', value='load', 
+                children=[
+                    dcc.Tab(label="Load", value='load', 
+                        children=[ddk.Card(width=100, 
+                                children=[ 
+                                    dcc.Loading(id='load_loader', children=[ddk.Graph(id="load_plot", config=graph_config)])
+                                ]
+                            )
+                        ]
+                    ),
+                    dcc.Tab(label="Profiles", value='profiles', 
+                        children=[ddk.Card(width=100, 
+                                children=[
+                                    dcc.Loading(id='profile_loader', children=[ddk.Graph(id="profile_plot", config=graph_config)])
+                                ]
+                            )
+                        ]
+                    )
+                ]
+            )
         ]
     ),
     ddk.Card(children=[
@@ -78,137 +88,85 @@ app.layout =  ddk.App([
 
 
 @app.callback(
-    [Output('all_plots', 'figure'),
-     Output('final_date', 'children'),
+    [Output('load_plot', 'figure'),
+     Output('profile_plot', 'figure'),
+     Output('final_date', 'children')
     ],
-    [Input('load_data', 'modified_timestamp'),
-     Input('profile_data', 'modified_timestamp'),
-     Input('refresh', 'n_clicks'),
+    [ Input('refresh', 'n_clicks'),
     ],
-    [State('load_data', 'data'),
-     State('profile_data', 'data')]
 )
-def make_graphs(ts_load, ts_profile, clicks, load_data, profile_data):
-    if ts_load is None or ts_profile is None or (not load_data and not profile_data):
-        raise dash.exceptions.PreventUpdate()
+def make_graphs(click):
 
-    if load_data:
+    load_df = pd.read_csv('https://data.pmel.noaa.gov/engineering/erddap/tabledap/prawler_load_TELONAS2.csv?time%2CAve_Load%2Clatitude%2Clongitude%2Ctimeseries_id%2CStd_Load%2CMin_Load%2CMax_Load%2CLoad_Temp&orderBy(%22time%22)', skiprows=[1])
+    baro_df = pd.read_csv('https://data.pmel.noaa.gov/engineering/erddap/tabledap/prawler_baro_TELONAS2.csv?time%2CBaroPres%2Clatitude%2Clongitude%2Ctimeseries_id&orderBy(%22time%22)&time>=2020-11-09T00:10:00Z', skiprows=[1])
 
-        j_data = json.loads(load_data)
+    last_date = load_df["time"].max()
+    load_plots_title = 'Load and Baro data through ' + last_date
 
-        load_data = j_data['load']
-        csv_data_load = StringIO(load_data)
-        load_df = pd.read_csv(csv_data_load)
+    ave_figure = go.Scatter(x=load_df['time'], y=load_df['Ave_Load'], name='Ave_Load', hoverinfo='x+y+name')
+    max_figure = go.Scatter(x=load_df['time'], y=load_df['Max_Load'], name='Max_Load', hoverinfo='x+y+name')
+    min_figure = go.Scatter(x=load_df['time'], y=load_df['Min_Load'], name='Min_Load', hoverinfo='x+y+name')
+    std_figure = go.Scatter(x=load_df['time'], y=load_df['Std_Load'], name='Std_Load', hoverinfo='x+y+name')
+    tmp_figure = go.Scatter(x=load_df['time'], y=load_df['Load_Temp'], name='Load_Temp', hoverinfo='x+y+name')
+    baro_figure = go.Scatter(x=load_df['time'], y=baro_df['BaroPres'], name='BaroPres', hoverinfo='x+y+name')
 
-        baro_data = j_data['baro']
-        csv_baro_load = StringIO(baro_data)
-        baro_df = pd.read_csv(csv_baro_load)
+    load_plots = make_subplots(  rows=3, cols=1, shared_xaxes='all',
+                                subplot_titles=("TELONAS2 - Load (lbs)",  
+                                                "TELONAS2 - Load_Temp (degC)",
+                                                "TELONAS2 - BaroPres (hPa)"),
+                                shared_yaxes=False,vertical_spacing=0.1)
 
-        last_date = j_data['last_date']
-        title = 'Load and Baro data through ' + last_date
+    load_plots.append_trace(ave_figure, 1, 1)
+    load_plots.add_trace(max_figure, 1, 1)
+    load_plots.add_trace(min_figure, 1, 1)
+    load_plots.add_trace(std_figure, 1, 1)
+    load_plots.append_trace(tmp_figure, 2, 1)
+    load_plots.append_trace(baro_figure, 3, 1)
 
-        ave_figure = go.Scatter(x=load_df['time'], y=load_df['Ave_Load'], name='Ave_Load', hoverinfo='x+y+name')
-        max_figure = go.Scatter(x=load_df['time'], y=load_df['Max_Load'], name='Max_Load', hoverinfo='x+y+name')
-        min_figure = go.Scatter(x=load_df['time'], y=load_df['Min_Load'], name='Min_Load', hoverinfo='x+y+name')
-        std_figure = go.Scatter(x=load_df['time'], y=load_df['Std_Load'], name='Std_Load', hoverinfo='x+y+name')
-        tmp_figure = go.Scatter(x=load_df['time'], y=load_df['Load_Temp'], name='Load_Temp', hoverinfo='x+y+name')
-        baro_figure = go.Scatter(x=load_df['time'], y=baro_df['BaroPres'], name='BaroPres', hoverinfo='x+y+name')
-
-        all_plots = make_subplots(  rows=3, cols=1, shared_xaxes='all',
-                                    subplot_titles=("TELONAS2 - Load (lbs)",  
-                                                    "TELONAS2 - Load_Temp (degC)",
-                                                    "TELONAS2 - BaroPres (hPa)"),
-                                    shared_yaxes=False,vertical_spacing=0.1)
-
-        all_plots.append_trace(ave_figure, 1, 1)
-        all_plots.add_trace(max_figure, 1, 1)
-        all_plots.add_trace(min_figure, 1, 1)
-        all_plots.add_trace(std_figure, 1, 1)
-        all_plots.append_trace(tmp_figure, 2, 1)
-        all_plots.append_trace(baro_figure, 3, 1)
-
-        all_plots['layout'].update(height=900,
-                            title=' ',
-                            hovermode='x unified',  
-                            xaxis_showticklabels=True,xaxis2_showticklabels=True,xaxis3_showticklabels=True,
-                            yaxis_fixedrange=True, yaxis2_fixedrange=True, yaxis3_fixedrange=True, 
-                            yaxis_title='Load', yaxis2_title='Load Temperature', yaxis3_title='Barometric Pressure', 
-                            showlegend=False, modebar={'orientation':'h'}, autosize=True)
-        return [all_plots, title]
-    elif profile_data:
-
-        df = pd.read_json(profile_data)
-        tmin = df['time'].min()
-        tmax = df['time'].max()
-        temp = go.Scatter(x=df["time"], y=df["SB_Depth"], 
-            marker=dict(showscale=True, color=df["SB_Temp"], colorscale='Viridis', colorbar=dict(x=.46)), 
-            mode='markers', name="SB_Temp", text=df["SB_Temp"])
-        cond = go.Scatter(x=df["time"], y=df["SB_Depth"], 
-            marker=dict(showscale=True, color=df["SB_Conductivity"], colorscale='Inferno'), 
-            mode='markers', name="SB_Conductivity", text=df["SB_Conductivity"])
-        all_plots=make_subplots(rows=1, cols=2, shared_xaxes='all', subplot_titles=("TELONAS2 - SB_Temp (degC)", "TELONAS2 - SB_Conductivity (UNITS?)"))
-        all_plots.add_trace(temp, row=1, col=1)
-        all_plots.add_trace(cond, row=1, col=2)
-        all_plots['layout'].update(height=750,
-                                   xaxis_fixedrange=False,
-                                   xaxis2_fixedrange=False,
-                                   yaxis_fixedrange=True, 
-                                   yaxis2_fixedrange=True, 
-                                   yaxis_title='Depth (m)',
-                                   yaxis2_title='Depth (m)',
-                                   modebar={'orientation':'h'},
-                                   autosize=True, 
-                                   showlegend=False, 
-                                   margin=dict(
-                                        l=50,
-                                        r=250,
-                                        b=50,
-                                        t=50,
-                                        pad=4
-                                   ))
-        all_plots['layout']['yaxis']['autorange'] = "reversed"
-        all_plots['layout']['yaxis2']['autorange'] = "reversed"
-        title = "Profiles of SB_Temp and SB_Conductivity from " + str(tmin) + " to " + str(tmax)
-        return [all_plots, title]
+    load_plots['layout'].update(height=900,
+                        title=' ',
+                        hovermode='x unified',  
+                        xaxis_showticklabels=True,xaxis2_showticklabels=True,xaxis3_showticklabels=True,
+                        yaxis_fixedrange=True, yaxis2_fixedrange=True, yaxis3_fixedrange=True, 
+                        yaxis_title='Load', yaxis2_title='Load Temperature', yaxis3_title='Barometric Pressure', 
+                        showlegend=False, modebar={'orientation':'h'}, autosize=True)
 
 
-@app.callback(
-    [
-        Output('load_data', 'data'), 
-        Output('profile_data', 'data'),
-        Output('data-loader', 'children')
-    ], 
-    [
-        Input('refresh', 'n_clicks'),
-        Input('selected-tab', 'value'),
-    ], 
-    [
-        State('load_data', 'data'), 
-        State('profile_data', 'data')
-    ])
-def read_data(n_clicks, tab, load_data, profile_data):
-    if n_clicks is None or tab is None:
-        raise dash.exceptions.PreventUpdate()
-    else:
-        load_json = {}
-        profiles_json = {}
-        if tab=='load':
-            load_response = urllib.request.urlopen('https://data.pmel.noaa.gov/engineering/erddap/tabledap/prawler_load_TELONAS2.csv?time%2CAve_Load%2Clatitude%2Clongitude%2Ctimeseries_id%2CStd_Load%2CMin_Load%2CMax_Load%2CLoad_Temp&orderBy(%22time%22)')
-            load_data_lines = [l.decode('utf-8') for l in load_response.readlines()]
-            last_date = load_data_lines[-1][:load_data_lines[-1].index(',')]
-            load_data = ''.join(load_data_lines)
+    df = pd.read_csv('https://data.pmel.noaa.gov/engineering/erddap/tabledap/prawler_TELONAS2.csv?time%2Cprofile_id%2CSB_Depth%2CSB_Temp%2CSB_Conductivity%2COptode_Temp%2COptode_Dissolved_O2%2Cwetlab_Chlorophyll&time>=max(time)-2days', skiprows=[1])
+    tmin = df['time'].min()
+    tmax = df['time'].max()
+    temp = go.Scatter(x=df["time"], y=df["SB_Depth"], 
+        marker=dict(showscale=True, color=df["SB_Temp"], colorscale='Viridis', colorbar=dict(x=.46)), 
+        mode='markers', name="SB_Temp", text=df["SB_Temp"])
+    cond = go.Scatter(x=df["time"], y=df["SB_Depth"], 
+        marker=dict(showscale=True, color=df["SB_Conductivity"], colorscale='Inferno'), 
+        mode='markers', name="SB_Conductivity", text=df["SB_Conductivity"])
+    profile_plots=make_subplots(rows=1, cols=2, shared_xaxes='all', subplot_titles=("TELONAS2 - SB_Temp (degC)", "TELONAS2 - SB_Conductivity (UNITS?)"))
+    profile_plots.add_trace(temp, row=1, col=1)
+    profile_plots.add_trace(cond, row=1, col=2)
+    profile_plots['layout'].update(height=750,
+                                xaxis_fixedrange=False,
+                                xaxis2_fixedrange=False,
+                                yaxis_fixedrange=True, 
+                                yaxis2_fixedrange=True, 
+                                yaxis_title='Depth (m)',
+                                yaxis2_title='Depth (m)',
+                                modebar={'orientation':'h'},
+                                autosize=True, 
+                                showlegend=False, 
+                                margin=dict(
+                                    l=50,
+                                    r=250,
+                                    b=50,
+                                    t=50,
+                                    pad=4
+                                ))
+    profile_plots['layout']['yaxis']['autorange'] = "reversed"
+    profile_plots['layout']['yaxis2']['autorange'] = "reversed"
+    profile_plots_title = "Profiles of SB_Temp and SB_Conductivity from " + str(tmin) + " to " + str(tmax)
+    return [load_plots, profile_plots, load_plots_title]
 
-            baro_response = urllib.request.urlopen('https://data.pmel.noaa.gov/engineering/erddap/tabledap/prawler_baro_TELONAS2.csv?time%2CBaroPres%2Clatitude%2Clongitude%2Ctimeseries_id&orderBy(%22time%22)&time>=2020-11-09T00:10:00Z')
-            baro_data_lines = [l.decode('utf-8') for l in baro_response.readlines()]
-            baro_data = ''.join(baro_data_lines)
 
-            load_data = {'load': load_data, 'baro': baro_data, 'last_date': last_date}  
-            load_json = json.dumps(load_data)
-        elif tab=='profiles':
-            profiles = pd.read_csv('https://data.pmel.noaa.gov/engineering/erddap/tabledap/prawler_TELONAS2.csv?time%2Cprofile_id%2CSB_Depth%2CSB_Temp%2CSB_Conductivity%2COptode_Temp%2COptode_Dissolved_O2%2Cwetlab_Chlorophyll&time>=max(time)-2days', skiprows=[1])
-            profiles_json = profiles.to_json()
-        
-    return load_json, profiles_json, True
 
 if __name__ == '__main__':
     app.run_server(debug=True)
