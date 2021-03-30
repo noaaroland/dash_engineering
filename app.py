@@ -112,7 +112,7 @@ def make_graphs(click):
 
     load_plots = make_subplots(  rows=3, cols=1, shared_xaxes='all',
                                 subplot_titles=("TELONAS2 - Load (lbs)",  
-                                                "TELONAS2 - Load_Temp (degC)",
+                                                "TELONAS2 - Load_Temp (℃)",
                                                 "TELONAS2 - BaroPres (hPa)"),
                                 shared_yaxes=False,vertical_spacing=0.1)
 
@@ -141,7 +141,7 @@ def make_graphs(click):
     cond = go.Scatter(x=df["time"], y=df["SB_Depth"], 
         marker=dict(showscale=True, color=df["SB_Conductivity"], colorscale='Inferno'), 
         mode='markers', name="SB_Conductivity", text=df["SB_Conductivity"])
-    profile_plots=make_subplots(rows=1, cols=2, shared_xaxes='all', subplot_titles=("TELONAS2 - SB_Temp (degC)", "TELONAS2 - SB_Conductivity (UNITS?)"))
+    profile_plots=make_subplots(rows=1, cols=2, shared_xaxes='all', subplot_titles=("TELONAS2 - SB_Temp (℃)", "TELONAS2 - SB_Conductivity (mS/cm)"))
     profile_plots.add_trace(temp, row=1, col=1)
     profile_plots.add_trace(cond, row=1, col=2)
     profile_plots['layout'].update(height=750,
